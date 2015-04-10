@@ -51,7 +51,9 @@ void setup() {
   if (client.connect((char*) clientName.c_str())) {
     Serial.println("Connected to MQTT broker");
     Serial.print("Topic is: ");
-    Serial.println(topic);
+    Serial.print(t_topic);
+    Serial.print(" and ");
+    Serial.println(h_topic);
 
   }
   else {
@@ -72,29 +74,40 @@ void loop() {
 
 
   static int counter = 0;
-  String payload ;
-  payload += t;
-  payload += ":";
-  payload += h;
+  String t_payload;
+  String h_payload;
+
+  t_payload += t;
+  h_payload += h;
 
   if (client.connected()) {
     Serial.print("Sending payload: ");
-    Serial.println(payload);
+    Serial.println(t_payload);
+    Serial.println(h_payload);
 
-    if (client.publish(topic, (char*) payload.c_str()))
+    if (client.publish(t_topic, (char*) t_payload.c_str()))
     {
-      Serial.println("Publish ok");
+      Serial.println("Publish temp ok");
     }
     else {
-      Serial.println("Publish failed");
+      Serial.println("Publish temp failed");
     }
 
+    if (client.publish(h_topic, (char*) h_payload.c_str()))
+    {
+      Serial.println("Publish humi ok");
+    }
+    else {
+      Serial.println("Publish humi failed");
+    }
   }
   else {
     if (client.connect((char*) clientName.c_str())) {
       Serial.println("Connected to MQTT broker");
       Serial.print("Topic is: ");
-      Serial.println(topic);
+      Serial.print(t_topic);
+      Serial.print(" and ");
+      Serial.println(h_topic);
     }
   }
   ++counter;
