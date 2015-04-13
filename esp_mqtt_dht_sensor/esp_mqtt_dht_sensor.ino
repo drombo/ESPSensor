@@ -23,19 +23,19 @@ String clientName = "esp-sensor";
 #include <PubSubClient.h>
 #include <ESP8266WiFi.h>
 #include <DHT.h>
-#include "esp_mqtt_dht_sensor.h"
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include "esp_mqtt_dht_sensor.h"
 
 #define ONE_WIRE_PIN 4 /* Digitalport Pin 4 definieren */
 #define DHTPIN 2 // what pin we're connected to
 #define DHTTYPE DHT22 // DHT 11 
 
+
 // initialisiere Sensoren
 OneWire ourWire(ONE_WIRE_PIN); /* Ini oneWire instance */
 DallasTemperature sensors(&ourWire);/* Dallas Temperature Library für Nutzung der oneWire Library vorbereiten */
 DHT dht(DHTPIN, DHTTYPE, 15);
-
 
 WiFiClient wifiClient;
 PubSubClient client(server, 1883, callback, wifiClient);
@@ -47,48 +47,50 @@ void callback(char* topic, byte* payload, unsigned int length) {
 void setup() {
   Serial.begin(115200);
   delay(10);
-  dht.begin();
-  
-  sensors.begin();/* Inizialisieren der Dallas Temperature library */
-  sensors.setResolution(TEMP_12_BIT); // Genauigkeit auf 12-Bit setzen
-  adresseAusgeben(); /* Adresse der Devices ausgeben */
   
   Serial.println();
   Serial.println();
   Serial.print("Connecting to ");
   Serial.println(ssid);
-
-  WiFi.mode(WIFI_STA);
+  
   WiFi.begin(ssid, password);
-
+  
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
   Serial.println("");
-  Serial.println("WiFi connected");
+  Serial.println("WiFi connected");  
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 
-  Serial.print("Connecting to ");
+  Serial.println();
+  Serial.println("Set up DHT Sensor");
+  dht.begin();
+//  delay(500);
+
+  Serial.println("Set up DS Sensor");
+  sensors.begin();/* Inizialisieren der Dallas Temperature library */
+  sensors.setResolution(TEMP_12_BIT); // Genauigkeit auf 12-Bit setzen
+  adresseAusgeben(); /* Adresse der Devices ausgeben */
+  //delay(500);
+  
+
+  Serial.print("Connecting to MQTT Server ");
   Serial.print(server);
   Serial.print(" as ");
   Serial.println(clientName);
-  if (client.connect((char*) clientName.c_str())) {
-    Serial.println("Connected to MQTT broker");
-    Serial.print("Topic is: ");
-    Serial.print(t_topic);
-    Serial.print(" and ");
-    Serial.println(h_topic);
+  
+  while (! client.connect((char*) clientName.c_str())) {
+    delay(1000);
+    Serial.print(".");
+  }
 
-  }
-  else {
-    Serial.println("MQTT connect failed");
-    Serial.println("Will reset and try again...");
-    abort();
-  }
-  
-  
+  Serial.println("Connected to MQTT broker");
+  Serial.print("Topic is: ");
+  Serial.print(t_topic);
+  Serial.print(" and ");
+  Serial.println(h_topic);
 }
 
 void loop() {
@@ -118,6 +120,7 @@ void loop() {
   Serial.print(sensors.getTempCByIndex(2) );
   Serial.print(" Grad Celsius 2 ");
   Serial.println();
+  
 
   if (client.connected()) {
     Serial.print("Sending payload: ");
@@ -151,7 +154,7 @@ void loop() {
   }
   
   ++counter;
-  delay(5000);
+  delay(15000);
 }
 
 void adresseAusgeben(void) {
