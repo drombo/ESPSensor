@@ -1,9 +1,8 @@
 /*
-Dank an
-Thomas Wenzlaff http://www.wenzlaff.de
-*/
 
-/*
+Code fuer die DS18B20 Sensoren von hier: http://blog.wenzlaff.de/?p=1254
+Dank an Thomas Wenzlaff
+
 Temperature Sensor DS18B20 an Digitalen Port Pin 2 wie folgt verbunden
 Links=Masse,
 Mitte=Data,
@@ -31,6 +30,15 @@ String clientName = "esp-sensor";
 #define DHTPIN 2 // what pin we're connected to
 #define DHTTYPE DHT22 // DHT 11 
 
+/*
+GPIO Pins
+0 2 4 5 12 13 14 (15 - GND) (16 - RST)
+
+
+*/
+
+int possiblePins[] = {0, 2, 4, 5, 12, 13, 14};
+
 String clientName;
 
 
@@ -38,6 +46,7 @@ String clientName;
 OneWire ourWire(ONE_WIRE_PIN); /* Ini oneWire instance */
 DallasTemperature sensors(&ourWire);/* Dallas Temperature Library für Nutzung der oneWire Library vorbereiten */
 DHT dht(DHTPIN, DHTTYPE, 15);
+DHT dht2(5,DHTTYPE,15);
 
 WiFiClient wifiClient;
 PubSubClient client(server, 1883, callback, wifiClient);
@@ -70,6 +79,7 @@ void setup() {
   Serial.println();
   Serial.println("Set up DHT Sensor");
   dht.begin();
+  dht2.begin();
 
 /*
   Serial.println("Set up DS Sensor");
@@ -108,7 +118,7 @@ void loop() {
   String h_payload;
 
   float h = dht.readHumidity();
-  float t = dht.readTemperature();
+  float t = dht.readTemperature();  
   if (isnan(h) || isnan(t)) {
     Serial.println("Failed to read from DHT sensor!");
     dht.begin();
@@ -155,6 +165,18 @@ void loop() {
       }
     }
 
+  }
+  
+  h = dht2.readHumidity();
+  t = dht2.readTemperature();  
+  if (isnan(h) || isnan(t)) {
+    Serial.println("Failed to read from DHT sensor2 !");
+    dht2.begin();
+  } else {
+    Serial.print("Sensor 2 Daten: ");
+    Serial.print(t);
+    Serial.print(" / ");
+    Serial.println(h);
   }
 
 /*
