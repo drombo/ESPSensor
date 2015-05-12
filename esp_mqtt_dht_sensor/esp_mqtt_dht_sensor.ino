@@ -33,11 +33,10 @@ String clientName = "esp-sensor";
 /*
 GPIO Pins
 0 2 4 5 12 13 14 (15 - GND) (16 - RST)
-
-
 */
 
-int possiblePins[] = {0, 2, 4, 5, 12, 13, 14};
+//int possiblePins[] = {0, 2, 4, 5, 12, 13, 14};
+//DHT dht_sensors[7];
 
 String clientName;
 
@@ -45,11 +44,15 @@ String clientName;
 // initialisiere Sensoren
 OneWire ourWire(ONE_WIRE_PIN); /* Ini oneWire instance */
 DallasTemperature sensors(&ourWire);/* Dallas Temperature Library für Nutzung der oneWire Library vorbereiten */
+
 DHT dht(DHTPIN, DHTTYPE, 15);
-DHT dht2(5,DHTTYPE,15);
+DHT dht2(5, DHTTYPE, 15);
 
 WiFiClient wifiClient;
 PubSubClient client(server, 1883, callback, wifiClient);
+
+int DHTreadFailCounter = 0;
+int DHT2readFailCounter = 0;
 
 void callback(char* topic, byte* payload, unsigned int length) {
   // handle message arrived, not used yet
@@ -77,16 +80,17 @@ void setup() {
   Serial.println(WiFi.localIP());
 
   Serial.println();
-  Serial.println("Set up DHT Sensor");
+  Serial.println("Set up DHT Sensors");
+
   dht.begin();
   dht2.begin();
 
-/*
-  Serial.println("Set up DS Sensor");
-  sensors.begin();
-  sensors.setResolution(TEMP_12_BIT); // Genauigkeit auf 12-Bit setzen
-  adresseAusgeben(); // Adresse der Devices ausgeben 
-*/
+  /*
+    Serial.println("Set up DS Sensor");
+    sensors.begin();
+    sensors.setResolution(TEMP_12_BIT); // Genauigkeit auf 12-Bit setzen
+    adresseAusgeben(); // Adresse der Devices ausgeben
+  */
 
   // Generate client name based on MAC address and last 8 bits of microsecond counter
   clientName += "esp8266-";
@@ -114,14 +118,21 @@ void setup() {
 }
 
 void loop() {
+  client.publish("Haus/Keller/Status", "Starte neue Messung");
   String t_payload;
   String h_payload;
 
   float h = dht.readHumidity();
-  float t = dht.readTemperature();  
+  float t = dht.readTemperature();
+  
   if (isnan(h) || isnan(t)) {
     Serial.println("Failed to read from DHT sensor!");
-    dht.begin();
+    client.publish("Haus/Keller/Status", "DHT Sensor auslesen fehlgeschlagen");
+    if (DHTreadFailCounter > 20) {
+      ESP.reset();
+    } else {
+      DHTreadFailCounter++;
+    }
   } else {
 
     t_payload += t;
@@ -166,32 +177,80 @@ void loop() {
     }
 
   }
-  
+
+
+  // sensor 2
+  t_payload = "";
+  h_payload = "";
+
   h = dht2.readHumidity();
-  t = dht2.readTemperature();  
+  t = dht2.readTemperature();
   if (isnan(h) || isnan(t)) {
-    Serial.println("Failed to read from DHT sensor2 !");
-    dht2.begin();
+    Serial.println("Failed to read from DHT sensor 2!");
+    client.publish("Haus/Keller/Status", "DHT Sensor 2 auslesen fehlgeschlagen");
+    if (DHT2readFailCounter > 20) {
+      ESP.reset();
+    } else {
+      DHT2readFailCounter++;
+    }
   } else {
-    Serial.print("Sensor 2 Daten: ");
-    Serial.print(t);
-    Serial.print(" / ");
-    Serial.println(h);
+
+    t_payload += t;
+    h_payload += h;
+
+    if (client.connected()) {
+      Serial.print("Sending payload: ");
+      Serial.print(t_payload);
+      Serial.print(" / ");
+      Serial.println(h_payload);
+
+      if (client.publish(t_topic, (char*) t_payload.c_str()))
+      {
+        Serial.print("Published temperature ");
+        Serial.print(t_topic);
+        Serial.print(": ");
+        Serial.println(t_payload);
+      }
+      else {
+        Serial.println("Publish temperature failed");
+      }
+
+      if (client.publish(h_topic, (char*) h_payload.c_str()))
+      {
+        Serial.print("Published humidity: ");
+        Serial.print(h_topic);
+        Serial.print(": ");
+        Serial.println(h_payload);
+      }
+      else {
+        Serial.println("Publish humidity failed");
+      }
+    }
+    else {
+      if (client.connect((char*) clientName.c_str())) {
+        Serial.println("Connected to MQTT broker");
+        Serial.print("Topic is: ");
+        Serial.print(t_topic);
+        Serial.print(" and ");
+        Serial.println(h_topic);
+      }
+    }
+
   }
 
-/*
-  sensors.requestTemperatures(); // Temp abfragen
+  /*
+    sensors.requestTemperatures(); // Temp abfragen
 
-  Serial.print(sensors.getTempCByIndex(0) );
-  Serial.print(" Grad Celsius 0 ");
+    Serial.print(sensors.getTempCByIndex(0) );
+    Serial.print(" Grad Celsius 0 ");
 
-  Serial.print(sensors.getTempCByIndex(1) );
-  Serial.print(" Grad Celsius 1 ");
+    Serial.print(sensors.getTempCByIndex(1) );
+    Serial.print(" Grad Celsius 1 ");
 
-  Serial.print(sensors.getTempCByIndex(2) );
-  Serial.print(" Grad Celsius 2 ");
-  Serial.println();
-*/
+    Serial.print(sensors.getTempCByIndex(2) );
+    Serial.print(" Grad Celsius 2 ");
+    Serial.println();
+  */
   delay(15000);
 }
 
