@@ -22,12 +22,11 @@ String clientName = "esp-sensor";
 #include <PubSubClient.h>
 #include <ESP8266WiFi.h>
 #include <DHT.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
+//#include <OneWire.h>
+//#include <DallasTemperature.h>
 #include "esp_mqtt_dht_sensor.h"
 
-#define ONE_WIRE_PIN 4 /* Digitalport Pin 4 definieren */
-#define DHTPIN 2 // what pin we're connected to
+//#define ONE_WIRE_PIN 4 /* Digitalport Pin 4 definieren */
 #define DHTTYPE DHT22 // DHT 11
 #define LOOPDELAY 15000 // 15s Pause zwischen den Messungen
 
@@ -40,14 +39,16 @@ GPIO Pins
 //DHT dht_sensors[7];
 
 String clientName = "ESPSensor";
-
+String sensorID = "ID_na";
+String statusTopic="";
 
 // initialisiere Sensoren
-OneWire ourWire(ONE_WIRE_PIN); /* Ini oneWire instance */
-DallasTemperature sensors(&ourWire);/* Dallas Temperature Library für Nutzung der oneWire Library vorbereiten */
+//OneWire ourWire(ONE_WIRE_PIN); /* Ini oneWire instance */
+//DallasTemperature sensors(&ourWire);/* Dallas Temperature Library für Nutzung der oneWire Library vorbereiten */
 
-DHT dht(DHTPIN, DHTTYPE, 15);
-DHT dht2(5, DHTTYPE, 15);
+DHT dht_pin02(2, DHTTYPE, 15);
+DHT dht_pin04(4, DHTTYPE, 15);
+DHT dht_pin05(5, DHTTYPE, 15);
 
 WiFiClient wifiClient;
 PubSubClient mqttclient(server, 1883, callback, wifiClient);
@@ -70,8 +71,9 @@ void setup() {
   Serial.println();
   Serial.println("Set up DHT Sensors");
 
-  dht.begin();
-  dht2.begin();
+  dht_pin02.begin();
+  dht_pin04.begin();
+  dht_pin05.begin();
 
   /*
     Serial.println("Set up DS Sensor");
@@ -81,6 +83,10 @@ void setup() {
   */
 
   generateMQTTClientName();
+  generateSensorID();
+  
+  statusTopic = sensorID;
+  statusTopic += "/Status";
 
   mqttConnect();
 }
@@ -88,26 +94,11 @@ void setup() {
 void loop() {
   mqttConnect();
 
-  mqttclient.publish("Haus/Keller/Status", "Starte neue Messung");
+  mqttclient.publish((char*) statusTopic.c_str(), "Starte neue Messung");
 
-  while (! readDHTSensor(dht, t_topic, h_topic)) {
-//  while (! readDHTSensor(dht, "Haus/Test/Temperatur", "Haus/Test/Luftfeuchte")) {
-    DHTreadFailCounter++;
-    delay(2000);
-    if (DHTreadFailCounter > 20) {
-      ESP.reset();
-    }
-  }
-
-  DHTreadFailCounter = 0;
-
-  while (! readDHTSensor(dht2, t_topic2, h_topic2)) {
-    DHTreadFailCounter++;
-    delay(2000);
-    if (DHTreadFailCounter > 20) {
-      ESP.reset();
-    }
-  }
+  readDHTSensor(dht_pin02, 2);
+  readDHTSensor(dht_pin04, 4);
+  readDHTSensor(dht_pin05, 5);
 
   /*
     sensors.requestTemperatures(); // Temp abfragen
@@ -125,9 +116,19 @@ void loop() {
   delay(LOOPDELAY);
 }
 
-boolean readDHTSensor(DHT dht, char* t_topic, char* h_topic) {
+boolean readDHTSensor(DHT dht, uint8_t pin) {
   String t_payload = "";
   String h_payload = "";
+  
+  String t_topic = sensorID;
+  t_topic +="/dht22_pin";
+  t_topic += pin;
+  t_topic += "/temp";
+
+  String h_topic = sensorID;
+  h_topic +="/dht22_pin";
+  h_topic += pin;
+  h_topic += "/humidity";
 
   float h = dht.readHumidity();
   float t = dht.readTemperature();
@@ -135,13 +136,12 @@ boolean readDHTSensor(DHT dht, char* t_topic, char* h_topic) {
   // Test auf Fehler
   if (isnan(h) || isnan(t)) {
     Serial.println("Failed to read from DHT sensor!");
-    String message = "DHT Sensor auslesen fehlgeschlagen (";
-    message += t_topic;
-    message += " oder ";
-    message += h_topic;
-    message += ")";
+    String message = "Error: ";
+    message += sensorID;
+    message += ", Pin: ";
+    message += pin;
     
-    if (! mqttclient.publish("Haus/Keller/Status", (char*) message.c_str())) {
+    if (! mqttclient.publish((char*) statusTopic.c_str(), (char*) message.c_str())) {
       return false;
     }
 
@@ -151,12 +151,7 @@ boolean readDHTSensor(DHT dht, char* t_topic, char* h_topic) {
     t_payload += t;
     h_payload += h;
 
-    Serial.print("Sending payload: ");
-    Serial.print(t_payload);
-    Serial.print(" / ");
-    Serial.println(h_payload);
-
-    if (mqttclient.publish(t_topic, (char*) t_payload.c_str())) {
+    if (mqttclient.publish( (char*) t_topic.c_str(), (char*) t_payload.c_str())) {
       Serial.print("Published temperature ");
       Serial.print(t_topic);
       Serial.print(": ");
@@ -166,7 +161,7 @@ boolean readDHTSensor(DHT dht, char* t_topic, char* h_topic) {
       return false;
     }
 
-    if (mqttclient.publish(h_topic, (char*) h_payload.c_str()))
+    if (mqttclient.publish((char*) h_topic.c_str(), (char*) h_payload.c_str()))
     {
       Serial.print("Published humidity: ");
       Serial.print(h_topic);
@@ -200,7 +195,7 @@ void wifiConnect() {
 
 void mqttConnect() {
   if (mqttclient.connected()) {
-    Serial.print("Bereits mit MQTT Server verbunden");
+    Serial.println("Bereits mit MQTT Server verbunden");
   } else {
     Serial.print("Connecting to MQTT Server ");
     Serial.print(server);
@@ -222,7 +217,7 @@ void mqttConnect() {
     failCounter = 0;
 
     Serial.println("Connected to MQTT broker");
-    mqttclient.publish("Haus/Keller/Status", "Da bin ich");
+    mqttclient.publish((char*) statusTopic.c_str(), "Da bin ich");
   }
 }
 
@@ -236,6 +231,13 @@ void generateMQTTClientName(){
   clientName += String(micros() & 0xff, 16);
 }
 
+void generateSensorID(){
+  sensorID = "ID_";
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  sensorID += macToStrShort(mac);
+}
+/*
 void adresseAusgeben(void) {
   byte i;
   byte present = 0;
@@ -264,6 +266,7 @@ void adresseAusgeben(void) {
   ourWire.reset_search();
   return;
 }
+*/
 
 String macToStr(const uint8_t* mac)
 {
@@ -272,6 +275,15 @@ String macToStr(const uint8_t* mac)
     result += String(mac[i], 16);
     if (i < 5)
       result += ':';
+  }
+  return result;
+}
+
+String macToStrShort(const uint8_t* mac)
+{
+  String result;
+  for (int i = 0; i < 6; ++i) {
+    result += String(mac[i], 16);
   }
   return result;
 }
