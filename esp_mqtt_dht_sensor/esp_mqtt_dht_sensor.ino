@@ -46,9 +46,13 @@ String statusTopic="";
 //OneWire ourWire(ONE_WIRE_PIN); /* Ini oneWire instance */
 //DallasTemperature sensors(&ourWire);/* Dallas Temperature Library für Nutzung der oneWire Library vorbereiten */
 
+DHT dht_pin00(0, DHTTYPE, 15);
 DHT dht_pin02(2, DHTTYPE, 15);
 DHT dht_pin04(4, DHTTYPE, 15);
 DHT dht_pin05(5, DHTTYPE, 15);
+DHT dht_pin12(12, DHTTYPE, 15);
+DHT dht_pin13(13, DHTTYPE, 15);
+DHT dht_pin14(14, DHTTYPE, 15);
 
 WiFiClient wifiClient;
 PubSubClient mqttclient(server, 1883, callback, wifiClient);
@@ -71,9 +75,13 @@ void setup() {
   Serial.println();
   Serial.println("Set up DHT Sensors");
 
+  dht_pin00.begin();
   dht_pin02.begin();
   dht_pin04.begin();
   dht_pin05.begin();
+  dht_pin12.begin();
+  dht_pin13.begin();
+  dht_pin14.begin();
 
   /*
     Serial.println("Set up DS Sensor");
@@ -96,9 +104,13 @@ void loop() {
 
   mqttclient.publish((char*) statusTopic.c_str(), "Starte neue Messung");
 
+  readDHTSensor(dht_pin00, 0);
   readDHTSensor(dht_pin02, 2);
   readDHTSensor(dht_pin04, 4);
   readDHTSensor(dht_pin05, 5);
+  readDHTSensor(dht_pin12, 12);
+  readDHTSensor(dht_pin13, 13);
+  readDHTSensor(dht_pin14, 14);
 
   /*
     sensors.requestTemperatures(); // Temp abfragen
