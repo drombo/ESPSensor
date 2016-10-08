@@ -35,6 +35,33 @@ PubSubClient mqttclient(server, 1883, wifiClient);
 
 int DHTreadFailCounter = 0;
 
+void mqttConnect() {
+  int failCounter = 0;
+
+  if (mqttclient.connected()) {
+    Serial.println("Already connected with MQTT Server");
+  } else {
+    Serial.print("Connecting to MQTT Server ");
+    Serial.print(server);
+    Serial.print(" as ");
+    Serial.println(clientName);
+
+    while (! mqttclient.connect((char*) clientName.c_str())) {
+      Serial.print(".");
+      delay(1000);
+
+      failCounter++;
+
+      if (failCounter > 60) {
+        ESP.reset();
+      }
+    }
+
+    Serial.println("Connected to MQTT broker");
+    mqttclient.publish((char*) statusTopic.c_str(), "new connection from sensor");
+  }
+}
+
 boolean readDHTSensor(DHT dht, uint8_t pin) {
   String t_payload = "";
   String h_payload = "";
@@ -52,6 +79,8 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
   float h = dht.readHumidity();
   float t = dht.readTemperature();
 
+  mqttConnect();
+
   // Test auf Fehler
   if (isnan(h) || isnan(t)) {
     Serial.print("Failed to read from DHT sensor at pin ");
@@ -61,7 +90,7 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
     message += sensorID;
     message += ", Pin: ";
     message += pin;
-    
+
     mqttclient.publish((char*) statusTopic.c_str(), (char*) message.c_str());
  
     return false;
@@ -116,33 +145,6 @@ void wifiConnect() {
   Serial.println(WiFi.localIP());
 }
 
-void mqttConnect() {
-  if (mqttclient.connected()) {
-    Serial.println("Already connected with MQTT Server");
-  } else {
-    Serial.print("Connecting to MQTT Server ");
-    Serial.print(server);
-    Serial.print(" as ");
-    Serial.println(clientName);
-
-    int failCounter = 0;
-
-    while (! mqttclient.connect((char*) clientName.c_str())) {
-      delay(500);
-      Serial.print(".");
-      failCounter++;
-
-      if (failCounter > 120) {
-        ESP.reset();
-      }
-    }
-
-    failCounter = 0;
-
-    Serial.println("Connected to MQTT broker");
-    mqttclient.publish((char*) statusTopic.c_str(), "Da bin ich");
-  }
-}
 
 void generateMQTTClientName(){
   // Generate client name based on MAC address and last 8 bits of microsecond counter
@@ -212,7 +214,6 @@ void setup() {
 
 void loop() {
   mqttConnect();
-
   mqttclient.publish((char*) statusTopic.c_str(), "Start new measurement");
 
   readDHTSensor(dht_pin00, 0);
