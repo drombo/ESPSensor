@@ -11,7 +11,7 @@ char* server = "MQTT Broker address";
 #include "esp_mqtt_dht_sensor.h"
 
 #define DHTTYPE DHT22 // DHT 11
-#define LOOPDELAY 30000 // 15s Pause zwischen den Messungen
+#define LOOPDELAY 30000 // 30s Pause zwischen den Messungen
 
 /*
 GPIO Pins
@@ -56,9 +56,9 @@ void mqttConnect() {
         ESP.reset();
       }
     }
-
+    Serial.println();
     Serial.println("Connected to MQTT broker");
-    mqttclient.publish((char*) statusTopic.c_str(), "new connection from sensor");
+    //mqttclient.publish((char*) statusTopic.c_str(), "- new connection from sensor");
   }
 }
 
@@ -76,28 +76,24 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
   h_topic += pin;
   h_topic += "/humidity";
 
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
-
   mqttConnect();
 
-  // Test auf Fehler
-  if (isnan(h) || isnan(t)) {
-    Serial.print("Failed to read from DHT sensor at pin ");
-    Serial.println(pin);
-
-    String message = "Error: ";
-    message += sensorID;
-    message += ", Pin: ";
+  // Temperature
+  float t = dht.readTemperature();
+ 
+  // Error check
+  if (isnan(t)) {
+    String message = "Error: Failed to read temperature from DHT sensor at pin ";
     message += pin;
 
+    Serial.println(message);
+    
     mqttclient.publish((char*) statusTopic.c_str(), (char*) message.c_str());
  
     return false;
   } else {
     // OK, send data
     t_payload += t;
-    h_payload += h;
 
     if (mqttclient.publish( (char*) t_topic.c_str(), (char*) t_payload.c_str())) {
       Serial.print("Published temperature ");
@@ -105,11 +101,27 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
       Serial.print(": ");
       Serial.println(t_payload);
     } else {
-      Serial.print("Publish temperature failed for pin ");
+      Serial.print("Publish temperature failed for sensor at pin ");
       Serial.println(pin);
-
       return false;
     }
+  }
+
+  // Humidity
+  float h = dht.readHumidity();
+  // Error check
+  if (isnan(h)) {
+    String message = "Error: Failed to read humidity from DHT sensor at pin ";
+    message += pin;
+
+    Serial.println(message);
+
+    mqttclient.publish((char*) statusTopic.c_str(), (char*) message.c_str());
+ 
+    return false;
+  } else {
+    // OK, send data
+    h_payload += h;
 
     if (mqttclient.publish((char*) h_topic.c_str(), (char*) h_payload.c_str()))
     {
@@ -118,7 +130,7 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
       Serial.print(": ");
       Serial.println(h_payload);
     } else {
-      Serial.print("Publish humidity failed for pin ");
+      Serial.print("Publish humidity failed for sensor at pin ");
       Serial.println(pin);
 
       return false;
@@ -214,7 +226,7 @@ void setup() {
 
 void loop() {
   mqttConnect();
-  mqttclient.publish((char*) statusTopic.c_str(), "Start new measurement");
+  mqttclient.publish((char*) statusTopic.c_str(), "- Start reading DHT sensors");
 
   readDHTSensor(dht_pin00, 0);
   readDHTSensor(dht_pin02, 2);
