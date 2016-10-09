@@ -11,7 +11,7 @@ char* server = "MQTT Broker address";
 #include "esp_mqtt_dht_sensor.h"
 
 #define DHTTYPE DHT22 // DHT 11
-#define LOOPDELAY 15000 // 15s Pause zwischen den Messungen
+#define LOOPDELAY 30000 // 15s Pause zwischen den Messungen
 
 /*
 GPIO Pins
