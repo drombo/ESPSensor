@@ -3,8 +3,8 @@
 #include <DHT.h>
 #include <DNSServer.h>
 #include <ESP8266WebServer.h>
-#include <WiFiManager.h>     
-#include "esp_mqtt_dht_sensor.h"
+#include <WiFiManager.h>
+#include <EEPROM.h>     
 
 #define DHTTYPE DHT22 // DHT 11
 #define LOOPDELAY 30000 // 30s Pause zwischen den Messungen
@@ -17,6 +17,9 @@ GPIO Pins
 String clientName = "ESPSensor";
 String sensorID = "ID_na";
 String statusTopic="";
+String mqtt_server = "";
+int _eepromStart;
+
 
 DHT dht_pin00(0, DHTTYPE, 15);
 DHT dht_pin02(2, DHTTYPE, 15);
@@ -27,9 +30,14 @@ DHT dht_pin13(13, DHTTYPE, 15);
 DHT dht_pin14(14, DHTTYPE, 15);
 
 WiFiClient wifiClient;
-PubSubClient mqttclient(server, 1883, wifiClient);
+PubSubClient mqttclient(wifiClient);
 
 int DHTreadFailCounter = 0;
+
+WiFiManagerParameter custom_mqtt_server("server", "mqtt server", (char*) mqtt_server.c_str(), 15);
+
+//flag for saving data
+//bool shouldSaveConfig = false;
 
 void mqttConnect() {
   int failCounter = 0;
@@ -38,7 +46,7 @@ void mqttConnect() {
     Serial.println("Already connected with MQTT Server");
   } else {
     Serial.print("Connecting to MQTT Server ");
-    Serial.print(server);
+    Serial.print(mqtt_server);
     Serial.print(" as ");
     Serial.println(clientName);
 
@@ -127,9 +135,21 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
   }
 }
 
+
 void wifiConnect() {
   WiFiManager wifiManager;
-  wifiManager.autoConnect("AutoConnectAP");
+  wifiManager.setSaveConfigCallback(saveConfigCallback);
+  wifiManager.addParameter(&custom_mqtt_server);
+
+  /* check if server address starts with a number 
+   * (at the moment only ip adresses possible)
+   * otherwise start configuration AP
+   */
+  if(mqtt_server[0] < 48 || mqtt_server[0] > 57) {
+    wifiManager.startConfigPortal("OnDemandAP");
+  } else {
+    wifiManager.autoConnect("AutoConnectAP");
+  }
   Serial.println("WiFi connected");
 }
 
@@ -171,6 +191,68 @@ String macToStrShort(const uint8_t* mac)
   return result;
 }
 
+
+String getEEPROMString(int start, int len) {
+  EEPROM.begin(512);
+  delay(10);
+  String string = "";
+  for (int i = _eepromStart + start; i < _eepromStart + start + len; i++) {
+    string += char(EEPROM.read(i));
+  }
+  EEPROM.end();
+  return string;
+}
+
+void setEEPROMString(int start, int len, String string) {
+  EEPROM.begin(512);
+  delay(10);
+  int si = 0;
+  for (int i = _eepromStart + start; i < _eepromStart + start + len; i++) {
+    char c;
+    if (si < string.length()) {
+      c = string[si];
+    } else {
+      c = 0;
+    }
+    EEPROM.write(i, c);
+    si++;
+  }
+  EEPROM.end();
+  Serial.println("Wrote EEPROM " + string);
+}
+
+
+String getMQTTServer() {
+  if (mqtt_server == "") {
+    mqtt_server = getEEPROMString(0, 15);
+  }
+
+  Serial.println("read MQTT server address from EEPROM: " + mqtt_server);
+  
+  return (char*) mqtt_server.c_str();
+}
+
+void setMQTTServer(String server) {
+  Serial.println("saving MQTT server address to EEPROM: " + server);
+  
+  mqtt_server = server;
+  setEEPROMString(0, 15, mqtt_server);
+}
+
+
+//callback notifying us of the need to save config
+void saveConfigCallback () {
+  char server[15];
+  strcpy(server, custom_mqtt_server.getValue());
+
+  Serial.print("save MQTT server '");
+  Serial.print(server);
+  Serial.println("'");
+  
+//  shouldSaveConfig = true;
+  setMQTTServer(server);
+}
+
 void setup() {
   Serial.begin(115200);
   delay(10);
@@ -178,8 +260,12 @@ void setup() {
   Serial.println();
   Serial.println();
 
+  mqtt_server = getMQTTServer();
+
   wifiConnect();
 
+  mqttclient.setServer((char*) mqtt_server.c_str(), 1883);
+  
   Serial.println();
   Serial.println("Set up DHT Sensors");
 
