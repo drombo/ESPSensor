@@ -87,10 +87,8 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
     message += pin;
 
     Serial.println(message);
-    
     mqttclient.publish((char*) statusTopic.c_str(), (char*) message.c_str());
  
-    return false;
   } else {
     // OK, send data
     t_payload += t;
@@ -103,7 +101,6 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
     } else {
       Serial.print("Publish temperature failed for sensor at pin ");
       Serial.println(pin);
-      return false;
     }
   }
 
@@ -115,11 +112,9 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
     message += pin;
 
     Serial.println(message);
-
     mqttclient.publish((char*) statusTopic.c_str(), (char*) message.c_str());
  
-    return false;
-  } else {
+   } else {
     // OK, send data
     h_payload += h;
 
@@ -132,8 +127,6 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
     } else {
       Serial.print("Publish humidity failed for sensor at pin ");
       Serial.println(pin);
-
-      return false;
     }
   }
 }
