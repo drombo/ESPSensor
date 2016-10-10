@@ -1,13 +1,9 @@
-/*
- * add this into seperate header file
-const char* ssid = "ssid";
-const char* password = "password";
-char* server = "MQTT Broker address";
-*/
-
 #include <PubSubClient.h>
 #include <ESP8266WiFi.h>
 #include <DHT.h>
+#include <DNSServer.h>
+#include <ESP8266WebServer.h>
+#include <WiFiManager.h>     
 #include "esp_mqtt_dht_sensor.h"
 
 #define DHTTYPE DHT22 // DHT 11
@@ -132,19 +128,10 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
 }
 
 void wifiConnect() {
-  Serial.print("WiFi Connecting to ");
-  Serial.println(ssid);
+  WiFiManager wifiManager;
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
+  wifiManager.autoConnect("AutoConnectAP");
   
-  Serial.print(".");
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("");
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
