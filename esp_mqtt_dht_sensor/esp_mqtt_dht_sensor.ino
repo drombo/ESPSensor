@@ -129,12 +129,8 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
 
 void wifiConnect() {
   WiFiManager wifiManager;
-
   wifiManager.autoConnect("AutoConnectAP");
-  
   Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
 }
 
 
