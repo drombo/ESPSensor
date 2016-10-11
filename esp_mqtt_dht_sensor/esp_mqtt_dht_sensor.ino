@@ -7,7 +7,9 @@
 #include <EEPROM.h>     
 
 #define DHTTYPE DHT22 // DHT 11
-#define LOOPDELAY 30000 // 30s Pause zwischen den Messungen
+#define LOOPDELAY 30000 // 30s interval for measurements
+#define MQTT_SERVER_NAME_LENGTH 40 // max length for server names
+#define TRIGGER_PIN 14  // set pin to LOW for config AP
 
 /*
 GPIO Pins
@@ -31,13 +33,7 @@ DHT dht_pin14(14, DHTTYPE, 15);
 
 WiFiClient wifiClient;
 PubSubClient mqttclient(wifiClient);
-
-int DHTreadFailCounter = 0;
-
 WiFiManagerParameter custom_mqtt_server("server", "mqtt server", (char*) mqtt_server.c_str(), 15);
-
-//flag for saving data
-//bool shouldSaveConfig = false;
 
 void mqttConnect() {
   int failCounter = 0;
@@ -45,10 +41,7 @@ void mqttConnect() {
   if (mqttclient.connected()) {
     Serial.println("Already connected with MQTT Server");
   } else {
-    Serial.print("Connecting to MQTT Server ");
-    Serial.print(mqtt_server);
-    Serial.print(" as ");
-    Serial.println(clientName);
+    Serial.println("Connecting to MQTT Server " + mqtt_server + " as " + clientName);
 
     while (! mqttclient.connect((char*) clientName.c_str())) {
       Serial.print(".");
@@ -62,7 +55,6 @@ void mqttConnect() {
     }
     Serial.println();
     Serial.println("Connected to MQTT broker");
-    //mqttclient.publish((char*) statusTopic.c_str(), "- new connection from sensor");
   }
 }
 
@@ -87,50 +79,37 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
  
   // Error check
   if (isnan(t)) {
-    String message = "Error: Failed to read temperature from DHT sensor at pin ";
-    message += pin;
-
+    String message = "Error: Failed to read temperature from DHT sensor at pin " + pin;
     Serial.println(message);
-    mqttclient.publish((char*) statusTopic.c_str(), (char*) message.c_str());
- 
+    mqttclient.publish((char*) statusTopic.c_str(), (char*) message.c_str()); 
   } else {
     // OK, send data
     t_payload += t;
 
     if (mqttclient.publish( (char*) t_topic.c_str(), (char*) t_payload.c_str())) {
-      Serial.print("Published temperature ");
-      Serial.print(t_topic);
-      Serial.print(": ");
-      Serial.println(t_payload);
+      Serial.println("Published temperature " + t_topic + ": " + t_payload);
     } else {
-      Serial.print("Publish temperature failed for sensor at pin ");
-      Serial.println(pin);
+      Serial.println("Publish temperature failed for sensor at pin " + pin);
     }
   }
 
   // Humidity
   float h = dht.readHumidity();
+  
   // Error check
   if (isnan(h)) {
-    String message = "Error: Failed to read humidity from DHT sensor at pin ";
-    message += pin;
-
+    String message = "Error: Failed to read humidity from DHT sensor at pin " + pin;
     Serial.println(message);
     mqttclient.publish((char*) statusTopic.c_str(), (char*) message.c_str());
- 
    } else {
     // OK, send data
     h_payload += h;
 
     if (mqttclient.publish((char*) h_topic.c_str(), (char*) h_payload.c_str()))
     {
-      Serial.print("Published humidity: ");
-      Serial.print(h_topic);
-      Serial.print(": ");
-      Serial.println(h_payload);
+      Serial.println("Published humidity " + h_topic + ": " + h_payload);
     } else {
-      Serial.print("Publish humidity failed for sensor at pin ");
-      Serial.println(pin);
+      Serial.println("Publish humidity failed for sensor at pin " + pin);
     }
   }
 }
@@ -141,11 +120,14 @@ void wifiConnect() {
   wifiManager.setSaveConfigCallback(saveConfigCallback);
   wifiManager.addParameter(&custom_mqtt_server);
 
-  /* check if server address starts with a number 
-   * (at the moment only ip adresses possible)
-   * otherwise start configuration AP
+  /* if MQTT server address is empty
+   * start configuration AP
    */
-  if(mqtt_server[0] < 48 || mqtt_server[0] > 57) {
+  mqtt_server.trim();
+
+  pinMode(TRIGGER_PIN, INPUT);
+  
+  if(mqtt_server == "" || digitalRead(TRIGGER_PIN) == LOW) {
     wifiManager.startConfigPortal("OnDemandAP");
   } else {
     wifiManager.autoConnect("AutoConnectAP");
@@ -218,38 +200,33 @@ void setEEPROMString(int start, int len, String string) {
     si++;
   }
   EEPROM.end();
-  Serial.println("Wrote EEPROM " + string);
+  Serial.println("Wrote EEPROM: '" + string + "'");
 }
 
 
 String getMQTTServer() {
   if (mqtt_server == "") {
-    mqtt_server = getEEPROMString(0, 15);
+    mqtt_server = getEEPROMString(0, MQTT_SERVER_NAME_LENGTH);
   }
 
+  mqtt_server.trim();
   Serial.println("read MQTT server address from EEPROM: " + mqtt_server);
   
   return (char*) mqtt_server.c_str();
 }
 
 void setMQTTServer(String server) {
-  Serial.println("saving MQTT server address to EEPROM: " + server);
-  
-  mqtt_server = server;
-  setEEPROMString(0, 15, mqtt_server);
+  Serial.println("saving MQTT server address to EEPROM: '" + server + "'");
+  setEEPROMString(0, MQTT_SERVER_NAME_LENGTH, server);
 }
 
 
 //callback notifying us of the need to save config
 void saveConfigCallback () {
-  char server[15];
-  strcpy(server, custom_mqtt_server.getValue());
-
-  Serial.print("save MQTT server '");
-  Serial.print(server);
-  Serial.println("'");
-  
-//  shouldSaveConfig = true;
+  String server = custom_mqtt_server.getValue();
+  server.trim();
+  mqtt_server = server;
+  Serial.println("save MQTT server: '" + server + "'");
   setMQTTServer(server);
 }
 
@@ -258,7 +235,7 @@ void setup() {
   delay(10);
 
   Serial.println();
-  Serial.println();
+
 
   mqtt_server = getMQTTServer();
 
@@ -282,8 +259,6 @@ void setup() {
   
   statusTopic = sensorID;
   statusTopic += "/Status";
-
-  mqttConnect();
 }
 
 void loop() {
