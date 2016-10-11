@@ -1,2 +1,4 @@
 esp_mqtt_dht_sensor.h
 
+.pioenvs
+.piolibdeps
