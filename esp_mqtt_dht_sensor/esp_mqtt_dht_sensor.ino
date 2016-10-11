@@ -131,9 +131,12 @@ void wifiConnect() {
   if(mqtt_server == "" || digitalRead(TRIGGER_PIN) == LOW) {
     wifiManager.startConfigPortal("ESPConfigAP");
   } else {
+    wifiManager.setTimeout(180);
+
     if (!wifiManager.autoConnect("AutoConnectAP")) {
-      Serial.println("failed to connect, we should reset as see if it connects");
+      Serial.println("failed to connect and hit timeout");
       delay(3000);
+      //reset and try again, or maybe put it to deep sleep
       ESP.reset();
       delay(5000);
     }
