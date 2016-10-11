@@ -33,7 +33,7 @@ DHT dht_pin14(14, DHTTYPE, 15);
 
 WiFiClient wifiClient;
 PubSubClient mqttclient(wifiClient);
-WiFiManagerParameter custom_mqtt_server("server", "mqtt server", (char*) mqtt_server.c_str(), 15);
+WiFiManagerParameter custom_mqtt_server("server", "mqtt server", (char*) mqtt_server.c_str(), MQTT_SERVER_NAME_LENGTH);
 
 void mqttConnect() {
   int failCounter = 0;
@@ -61,6 +61,7 @@ void mqttConnect() {
 boolean readDHTSensor(DHT dht, uint8_t pin) {
   String t_payload = "";
   String h_payload = "";
+  String message = "";
   
   String t_topic = sensorID;
   t_topic +="/dht22_pin";
@@ -79,7 +80,8 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
  
   // Error check
   if (isnan(t)) {
-    String message = "Error: Failed to read temperature from DHT sensor at pin " + pin;
+    message = "Error: Failed to read temperature from DHT sensor at pin ";
+    message += pin; 
     Serial.println(message);
     mqttclient.publish((char*) statusTopic.c_str(), (char*) message.c_str()); 
   } else {
@@ -98,7 +100,8 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
   
   // Error check
   if (isnan(h)) {
-    String message = "Error: Failed to read humidity from DHT sensor at pin " + pin;
+    message = "Error: Failed to read humidity from DHT sensor at pin ";
+    message += pin; 
     Serial.println(message);
     mqttclient.publish((char*) statusTopic.c_str(), (char*) message.c_str());
    } else {
@@ -224,6 +227,7 @@ void setMQTTServer(String server) {
 //callback notifying us of the need to save config
 void saveConfigCallback () {
   String server = custom_mqtt_server.getValue();
+  Serial.println("got MQTT server value: '" + server + "'");
   server.trim();
   mqtt_server = server;
   Serial.println("save MQTT server: '" + server + "'");
