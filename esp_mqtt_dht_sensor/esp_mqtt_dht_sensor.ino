@@ -49,7 +49,9 @@ void mqttConnect() {
 
       failCounter++;
 
-      if (failCounter > 60) {
+      if (failCounter > 10) {
+        // reset MQTT server name or IP address
+        mqtt_server = "";
         ESP.reset();
       }
     }
@@ -133,7 +135,12 @@ void wifiConnect() {
   if(mqtt_server == "" || digitalRead(TRIGGER_PIN) == LOW) {
     wifiManager.startConfigPortal("OnDemandAP");
   } else {
-    wifiManager.autoConnect("AutoConnectAP");
+    if (!wifiManager.autoConnect("AutoConnectAP")) {
+      Serial.println("failed to connect, we should reset as see if it connects");
+      delay(3000);
+      ESP.reset();
+      delay(5000);
+    }
   }
   Serial.println("WiFi connected");
 }
