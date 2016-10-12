@@ -21,6 +21,8 @@ String sensorID = "ID_na";
 String statusTopic="";
 String mqtt_server = "";
 int _eepromStart;
+//flag for saving data
+bool shouldSaveConfig = false;
 
 
 DHT dht_pin00(0, DHTTYPE, 15);
@@ -33,7 +35,6 @@ DHT dht_pin14(14, DHTTYPE, 15);
 
 WiFiClient wifiClient;
 PubSubClient mqttclient(wifiClient);
-WiFiManagerParameter custom_mqtt_server("foo", "bar", "baz", 0);
 
 void mqttConnect() {
   int failCounter = 0;
@@ -41,15 +42,15 @@ void mqttConnect() {
   if (mqttclient.connected()) {
     Serial.println("Already connected with MQTT Server");
   } else {
-    Serial.println("Connecting to MQTT Server " + mqtt_server + " as " + clientName);
+    Serial.println("Connecting to MQTT server " + mqtt_server + " as " + clientName);
 
     while (! mqttclient.connect((char*) clientName.c_str())) {
-      Serial.print(".");
+      Serial.println("Connection to MQTT server failed with state: " + mqttclient.state());
       delay(1000);
 
       failCounter++;
 
-      if (failCounter > 5) {
+      if (failCounter > 10) {
         ESP.reset();
       }
     }
@@ -116,35 +117,6 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
     }
   }
 }
-
-
-void wifiConnect() {
-  WiFiManager wifiManager;
-  wifiManager.setSaveConfigCallback(saveConfigCallback);
-
-  custom_mqtt_server = WiFiManagerParameter("server", "mqtt server", (char*) mqtt_server.c_str(), MQTT_SERVER_NAME_LENGTH);
-  wifiManager.addParameter(&custom_mqtt_server);
-
-  /* if MQTT server address is empty or trigger pin is low
-   * start configuration AP
-   */
-  if(mqtt_server == "" || digitalRead(TRIGGER_PIN) == LOW) {
-    wifiManager.startConfigPortal("ESPConfigAP");
-  } else {
-    wifiManager.setTimeout(180);
-
-    if (!wifiManager.autoConnect("AutoConnectAP")) {
-      Serial.println("failed to connect and hit timeout");
-      delay(3000);
-      //reset and try again, or maybe put it to deep sleep
-      ESP.reset();
-      delay(5000);
-    }
-  }
-  Serial.println();
-  Serial.println("WiFi connected to SSID "+WiFi.SSID());
-}
-
 
 void generateMQTTClientName(){
   // Generate client name based on MAC address and last 8 bits of microsecond counter
@@ -214,14 +186,14 @@ void setEEPROMString(int start, int len, String string) {
 }
 
 
-String getMQTTServer() {
+String getMQTTServerFromEEPROM() {
   String server = getEEPROMString(0, MQTT_SERVER_NAME_LENGTH);
   server.trim();
   Serial.println("read MQTT server address from EEPROM: '" + server + "'");
   return (char*) server.c_str();
 }
 
-void setMQTTServer(String server) {
+void setMQTTServerToEEPROM(String server) {
   server.trim();
   Serial.println("saving MQTT server address to EEPROM: '" + server + "'");
   setEEPROMString(0, MQTT_SERVER_NAME_LENGTH, server);
@@ -229,23 +201,63 @@ void setMQTTServer(String server) {
 
 //callback notifying us of the need to save config
 void saveConfigCallback () {
-  String server = custom_mqtt_server.getValue();
-  Serial.println("got MQTT server value: '" + server + "'");
-  setMQTTServer(server);
-  mqtt_server = getMQTTServer();
+  Serial.println("We should save the config");
+  shouldSaveConfig = true;
 }
 
-void setup() {
+void setup() {  
   Serial.begin(115200);
   delay(10);
 
   Serial.println();
 
-  mqtt_server = getMQTTServer();
+  mqtt_server = getMQTTServerFromEEPROM();
   
-  wifiConnect();
+  WiFiManager wifiManager;
+  wifiManager.setSaveConfigCallback(saveConfigCallback);
 
+  WiFiManagerParameter custom_mqtt_server = WiFiManagerParameter("server", "mqtt server", (char*) mqtt_server.c_str(), MQTT_SERVER_NAME_LENGTH);
+  wifiManager.addParameter(&custom_mqtt_server);
+
+  wifiManager.setTimeout(180);
+
+  /* if MQTT server address is empty or trigger pin is low
+   * start configuration AP
+   */
+  if(mqtt_server == "" || digitalRead(TRIGGER_PIN) == LOW) {
+    wifiManager.startConfigPortal("ESPConfigAP");
+  } else {
+    if (!wifiManager.autoConnect("AutoConnectAP")) {
+      Serial.println("failed to connect wifi and hit timeout");
+      delay(3000);
+      //reset and try again, or maybe put it to deep sleep
+      ESP.reset();
+      delay(5000);
+    }
+  }
+  Serial.println();
+  Serial.println("WiFi connected to SSID "+WiFi.SSID());
+
+  // save parameter if needed
+  if (shouldSaveConfig) {
+    String server = custom_mqtt_server.getValue();
+    Serial.println("got MQTT server value: '" + server + "'");
+    setMQTTServerToEEPROM(server);
+    mqtt_server = getMQTTServerFromEEPROM();
+  }
+
+  // set MQTT values
+  generateMQTTClientName();
+  generateSensorID();
+  
+  statusTopic = sensorID;
+  statusTopic += "/Status";
+
+  // set MQTT server
   mqttclient.setServer((char*) mqtt_server.c_str(), 1883);
+
+  // try to connect to mqtt server
+  mqttConnect();
   
   Serial.println();
   Serial.println("Set up DHT Sensors");
@@ -258,15 +270,10 @@ void setup() {
   dht_pin13.begin();
   dht_pin14.begin();
 
-  generateMQTTClientName();
-  generateSensorID();
-  
-  statusTopic = sensorID;
-  statusTopic += "/Status";
 }
 
 void loop() {
-  mqttConnect();
+  
   mqttclient.publish((char*) statusTopic.c_str(), "- Start reading DHT sensors");
 
   readDHTSensor(dht_pin00, 0);
