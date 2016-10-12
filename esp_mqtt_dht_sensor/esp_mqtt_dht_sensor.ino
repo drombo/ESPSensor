@@ -18,12 +18,13 @@ GPIO Pins
 
 String clientName = "ESPSensor";
 String sensorID = "ID_na";
+String infoTopic="";
 String statusTopic="";
+String errorTopic="";
 String mqtt_server = "";
 int _eepromStart;
 //flag for saving data
 bool shouldSaveConfig = false;
-
 
 DHT dht_pin00(0, DHTTYPE, 15);
 DHT dht_pin02(2, DHTTYPE, 15);
@@ -76,38 +77,27 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
 
   mqttConnect();
 
-  // Temperature
+  // Read sensor
   float t = dht.readTemperature();
+  float h = dht.readHumidity();
  
   // Error check
-  if (isnan(t)) {
-    message = "Error: Failed to read temperature from DHT sensor at pin ";
+  if (isnan(t) || isnan(h)) {
+    message = "Failed to read from DHT sensor at pin ";
     message += pin; 
     Serial.println(message);
-    mqttclient.publish((char*) statusTopic.c_str(), (char*) message.c_str()); 
+    mqttclient.publish((char*) errorTopic.c_str(), (char*) message.c_str()); 
+    return false;
   } else {
     // OK, send data
     t_payload += t;
+    h_payload += h;
 
     if (mqttclient.publish( (char*) t_topic.c_str(), (char*) t_payload.c_str())) {
       Serial.println("Published temperature " + t_topic + ": " + t_payload);
     } else {
       Serial.println("Publish temperature failed for sensor at pin " + pin);
     }
-  }
-
-  // Humidity
-  float h = dht.readHumidity();
-  
-  // Error check
-  if (isnan(h)) {
-    message = "Error: Failed to read humidity from DHT sensor at pin ";
-    message += pin; 
-    Serial.println(message);
-    mqttclient.publish((char*) statusTopic.c_str(), (char*) message.c_str());
-   } else {
-    // OK, send data
-    h_payload += h;
 
     if (mqttclient.publish((char*) h_topic.c_str(), (char*) h_payload.c_str()))
     {
@@ -116,6 +106,7 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
       Serial.println("Publish humidity failed for sensor at pin " + pin);
     }
   }
+  return true;
 }
 
 void generateMQTTClientName(){
@@ -219,6 +210,9 @@ void setup() {
   WiFiManagerParameter custom_mqtt_server = WiFiManagerParameter("server", "mqtt server", (char*) mqtt_server.c_str(), MQTT_SERVER_NAME_LENGTH);
   wifiManager.addParameter(&custom_mqtt_server);
 
+  //reset settings - for testing
+  //wifiManager.resetSettings();
+
   wifiManager.setTimeout(180);
 
   /* if MQTT server address is empty or trigger pin is low
@@ -250,8 +244,14 @@ void setup() {
   generateMQTTClientName();
   generateSensorID();
   
+  infoTopic = sensorID;
+  infoTopic += "/Info";
+
   statusTopic = sensorID;
   statusTopic += "/Status";
+
+  errorTopic = sensorID;
+  errorTopic += "/Error";
 
   // set MQTT server
   mqttclient.setServer((char*) mqtt_server.c_str(), 1883);
@@ -274,16 +274,31 @@ void setup() {
 
 void loop() {
   
-  mqttclient.publish((char*) statusTopic.c_str(), "- Start reading DHT sensors");
+  mqttclient.publish((char*) infoTopic.c_str(), "Start reading DHT sensors");
 
-  readDHTSensor(dht_pin00, 0);
-  readDHTSensor(dht_pin02, 2);
-  readDHTSensor(dht_pin04, 4);
-  readDHTSensor(dht_pin05, 5);
-  readDHTSensor(dht_pin12, 12);
-  readDHTSensor(dht_pin13, 13);
-  readDHTSensor(dht_pin14, 14);
+  uint8_t returncode = 0;  
+  String status = "";
 
+  returncode |= ! readDHTSensor(dht_pin00, 0);
+  returncode <<= 1;
+  returncode |= ! readDHTSensor(dht_pin02, 2);
+  returncode <<= 1;
+  returncode |= ! readDHTSensor(dht_pin04, 4);
+  returncode <<= 1;
+  returncode |= ! readDHTSensor(dht_pin05, 5);
+  returncode <<= 1;
+  returncode |= ! readDHTSensor(dht_pin12, 12);
+  returncode <<= 1;
+  returncode |= ! readDHTSensor(dht_pin13, 13);
+  returncode <<= 1;
+  returncode |= ! readDHTSensor(dht_pin14, 14);
+
+  Serial.print("return code is ");
+  Serial.println(returncode);
+
+  status += returncode;   
+  mqttclient.publish((char*) statusTopic.c_str(), (char*) status.c_str());
+  
   delay(LOOPDELAY);
 }
 
