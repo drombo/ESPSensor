@@ -52,7 +52,9 @@ void mqttConnect() {
       failCounter++;
 
       if (failCounter > 10) {
+        delay(3000);
         ESP.reset();
+        delay(5000);
       }
     }
     Serial.println();
@@ -273,31 +275,37 @@ void setup() {
 }
 
 void loop() {
+  Serial.println("Enter loop");
+
+  if (WiFi.status() == WL_CONNECTED) {
+    mqttConnect();
+    mqttclient.publish((char*) infoTopic.c_str(), "Start reading DHT sensors");
   
-  mqttclient.publish((char*) infoTopic.c_str(), "Start reading DHT sensors");
-
-  uint8_t returncode = 0;  
-  String status = "";
-
-  returncode |= ! readDHTSensor(dht_pin00, 0);
-  returncode <<= 1;
-  returncode |= ! readDHTSensor(dht_pin02, 2);
-  returncode <<= 1;
-  returncode |= ! readDHTSensor(dht_pin04, 4);
-  returncode <<= 1;
-  returncode |= ! readDHTSensor(dht_pin05, 5);
-  returncode <<= 1;
-  returncode |= ! readDHTSensor(dht_pin12, 12);
-  returncode <<= 1;
-  returncode |= ! readDHTSensor(dht_pin13, 13);
-  returncode <<= 1;
-  returncode |= ! readDHTSensor(dht_pin14, 14);
-
-  Serial.print("return code is ");
-  Serial.println(returncode);
-
-  status += returncode;   
-  mqttclient.publish((char*) statusTopic.c_str(), (char*) status.c_str());
+    uint8_t returncode = 0;  
+    String status = "";
+  
+    returncode |= ! readDHTSensor(dht_pin00, 0);
+    returncode <<= 1;
+    returncode |= ! readDHTSensor(dht_pin02, 2);
+    returncode <<= 1;
+    returncode |= ! readDHTSensor(dht_pin04, 4);
+    returncode <<= 1;
+    returncode |= ! readDHTSensor(dht_pin05, 5);
+    returncode <<= 1;
+    returncode |= ! readDHTSensor(dht_pin12, 12);
+    returncode <<= 1;
+    returncode |= ! readDHTSensor(dht_pin13, 13);
+    returncode <<= 1;
+    returncode |= ! readDHTSensor(dht_pin14, 14);
+  
+    Serial.print("return code is ");
+    Serial.println(returncode);
+  
+    status += returncode;   
+    mqttclient.publish((char*) statusTopic.c_str(), (char*) status.c_str());
+  } else {
+    Serial.println("Wifi not connected, did nothing");
+  }
   
   delay(LOOPDELAY);
 }
