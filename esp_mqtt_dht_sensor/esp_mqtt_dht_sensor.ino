@@ -7,7 +7,8 @@
 #include <EEPROM.h>     
 
 #define DHTTYPE DHT22 // DHT 11
-#define LOOPDELAY 30000 // 30s interval for measurements
+#define SLEEPTIME 30 // Sleep Time in s
+#define WIFI_CONNECT_TIME 6 // time to connect to wifi in s
 #define MQTT_SERVER_NAME_LENGTH 40 // max length for server names
 #define TRIGGER_PIN 14  // set pin to LOW for config AP
 
@@ -201,10 +202,7 @@ void saveConfigCallback () {
 
 void setup() {  
   Serial.begin(115200);
-  delay(10);
-
   Serial.println();
-
   mqtt_server = getMQTTServerFromEEPROM();
   
   WiFiManager wifiManager;
@@ -270,11 +268,6 @@ void setup() {
   dht_pin13.begin();
   dht_pin14.begin();
 
-}
-
-void loop() {
-  Serial.println("Enter loop");
-
   if (mqttConnect()) {
     mqttclient.publish((char*) infoTopic.c_str(), "Start reading DHT sensors");
   
@@ -303,7 +296,11 @@ void loop() {
   } else {
     Serial.println("Wifi or MQTT was not connected, did nothing");
   }
-  
-  delay(LOOPDELAY);
+
+  delay(100);
+  ESP.deepSleep((SLEEPTIME - WIFI_CONNECT_TIME) * 1000000);
+}
+
+void loop() {
 }
 
