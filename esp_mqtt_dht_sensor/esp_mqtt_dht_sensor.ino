@@ -37,29 +37,32 @@ DHT dht_pin14(14, DHTTYPE, 15);
 WiFiClient wifiClient;
 PubSubClient mqttclient(wifiClient);
 
-void mqttConnect() {
-  int failCounter = 0;
+boolean mqttConnect() {
+  int failCounter = 10;
 
-  if (mqttclient.connected()) {
-    Serial.println("Already connected with MQTT Server");
-  } else {
-    Serial.println("Connecting to MQTT server " + mqtt_server + " as " + clientName);
+  if (WiFi.status() == WL_CONNECTED) {
+    if (mqttclient.connected()) {
+      Serial.println("Already connected with MQTT Server");
+    } else {
+      Serial.println("Connecting to MQTT server " + mqtt_server + " as " + clientName);
+  
+      while (! mqttclient.connect((char*) clientName.c_str()) && failCounter >= 0) {
+        Serial.println("Connection to MQTT server failed with state: " + mqttclient.state());
+        delay(1000);        
+        failCounter--;
+      }
 
-    while (! mqttclient.connect((char*) clientName.c_str())) {
-      Serial.println("Connection to MQTT server failed with state: " + mqttclient.state());
-      delay(1000);
-
-      failCounter++;
-
-      if (failCounter > 10) {
-        delay(3000);
-        ESP.reset();
-        delay(5000);
+      if (mqttclient.connected()) {
+        Serial.println();
+        Serial.println("Connected to MQTT broker on host " + mqtt_server);
+      } else {
+        return false;
       }
     }
-    Serial.println();
-    Serial.println("Connected to MQTT broker on host " + mqtt_server);
+  } else {
+    return false;
   }
+  return true;
 }
 
 boolean readDHTSensor(DHT dht, uint8_t pin) {
@@ -76,8 +79,6 @@ boolean readDHTSensor(DHT dht, uint8_t pin) {
   h_topic +="/dht22_pin";
   h_topic += pin;
   h_topic += "/humidity";
-
-  mqttConnect();
 
   // Read sensor
   float t = dht.readTemperature();
@@ -257,9 +258,6 @@ void setup() {
 
   // set MQTT server
   mqttclient.setServer((char*) mqtt_server.c_str(), 1883);
-
-  // try to connect to mqtt server
-  mqttConnect();
   
   Serial.println();
   Serial.println("Set up DHT Sensors");
@@ -277,8 +275,7 @@ void setup() {
 void loop() {
   Serial.println("Enter loop");
 
-  if (WiFi.status() == WL_CONNECTED) {
-    mqttConnect();
+  if (mqttConnect()) {
     mqttclient.publish((char*) infoTopic.c_str(), "Start reading DHT sensors");
   
     uint8_t returncode = 0;  
@@ -304,7 +301,7 @@ void loop() {
     status += returncode;   
     mqttclient.publish((char*) statusTopic.c_str(), (char*) status.c_str());
   } else {
-    Serial.println("Wifi not connected, did nothing");
+    Serial.println("Wifi or MQTT was not connected, did nothing");
   }
   
   delay(LOOPDELAY);
