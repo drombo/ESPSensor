@@ -19,7 +19,7 @@
 #include <WiFiManager.h>
 #include <EEPROM.h>     
 
-#define SLEEPTIME 5                 // ESP Sleep Time in s
+#define SLEEPTIME 60                 // ESP Sleep Time in s
 #define WIFI_CONNECT_TIME 6         // time to connect to wifi in s
 #define MQTT_SERVER_NAME_LENGTH 40  // max length for mqtt server names
 #define TRIGGER_PIN 0               // set pin to LOW for config AP
@@ -142,9 +142,6 @@ String macToStrShort(const uint8_t* mac)
 {
   String result;
   for (int i = 0; i < 6; ++i) {
-    if (mac[i] < 16) {
-      result += "0";
-    } 
     result += String(mac[i], 16);
   }
   return result;
@@ -170,7 +167,7 @@ String getAddress(DeviceAddress deviceAddress)
     if (deviceAddress[i] < 16) {
       address += "0";
     } 
-    address += String(deviceAddress[i], HEX);
+    address += deviceAddress[i];
   }
   return address;
 }
@@ -312,11 +309,7 @@ void setup() {
   // set MQTT server
   mqttclient.setServer((char*) mqtt_server.c_str(), 1883);
   
-}
-
-void loop() {
-
-   //********************************************************
+  //********************************************************
   //  do the work
   //********************************************************
 
@@ -366,5 +359,13 @@ void loop() {
   //  end of work
   //********************************************************
 
-  delay(SLEEPTIME * 1000);
+  // go to sleep
+  delay(100);
+  DEBUG_PRINTLN(""); 
+  DEBUG_PRINT("go to sleep for "+String((SLEEPTIME - WIFI_CONNECT_TIME), DEC));
+  DEBUG_PRINTLN("sec"); 
+  ESP.deepSleep((SLEEPTIME - WIFI_CONNECT_TIME) * 1000000);
+}
+
+void loop() {
 }
