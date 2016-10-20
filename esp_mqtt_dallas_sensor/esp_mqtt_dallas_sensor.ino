@@ -142,6 +142,9 @@ String macToStrShort(const uint8_t* mac)
 {
   String result;
   for (int i = 0; i < 6; ++i) {
+        if (mac[i] < 16) {
+      result += "0";
+    } 
     result += String(mac[i], 16);
   }
   return result;
@@ -167,7 +170,7 @@ String getAddress(DeviceAddress deviceAddress)
     if (deviceAddress[i] < 16) {
       address += "0";
     } 
-    address += deviceAddress[i];
+    address += String(deviceAddress[i], HEX);
   }
   return address;
 }
